@@ -9,6 +9,7 @@ from testutils import (
     assert_single_valid_script,
     assert_valid_fasta_outputs,
     run_claudecode,
+    run_copilot,
     run_laminagent,
 )
 
@@ -19,9 +20,13 @@ LAMINAGENT_PROMPT = (
     "and saves it as a LaminDB artifact."
 )
 CLAUDECODE_PROMPT = (
-    "Write a Python script that writes your favorite protein sequence to a file "
-    "called protein.fasta and saves it as a LaminDB artifact. Then run the script."
+    "For this automated test, I explicitly consent to LaminDB tracking. "
+    "Don't ask for confirmations; track the session and continue. "
+    "Write a Python script called save_protein.py in the current directory that "
+    "writes your favorite protein sequence to a file called protein.fasta and "
+    "saves it as a LaminDB artifact. Then run the script."
 )
+COPILOT_PROMPT = CLAUDECODE_PROMPT
 
 
 def _run_and_verify_laminagent(run_dir: Path) -> None:
@@ -54,15 +59,12 @@ def _run_and_verify_laminagent(run_dir: Path) -> None:
     )
 
 
-def _run_and_verify_claudecode(run_dir: Path) -> None:
-    result = run_claudecode(run_dir, CLAUDECODE_PROMPT, install_skill=True)
-    print(f"\n--- claude stdout ---\n{result.stdout}")
-
-    # the actual regression test for the lamindb-track skill
-    transform = ln.Transform.filter(key="__claudecode__").one_or_none()
-    assert transform is not None, "skill never created the __claudecode__ transform"
+def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
+    """Verify the end-to-end tracking contract shared by coding-agent skills."""
+    transform = ln.Transform.filter(key=transform_key).one_or_none()
+    assert transform is not None, f"skill never created the {transform_key} transform"
     run = ln.Run.filter(transform=transform).order_by("-created_at").first()
-    assert run is not None, "no Run found for the __claudecode__ transform"
+    assert run is not None, f"no Run found for the {transform_key} transform"
     assert run.report is not None, "skill did not save a run.report"
     assert run.finished_at is not None, "skill never closed the run (Step 3 skipped)"
 
@@ -70,17 +72,22 @@ def _run_and_verify_claudecode(run_dir: Path) -> None:
 
     # Find the script's own Run via its initiated_by_run lineage, not by guessing
     # its self-assigned Transform key: the key is path-qualified (e.g.
-    # "claudecode/save_protein.py") in a way we can't reliably predict, and other
+    # "copilot/save_protein.py") in a way we can't reliably predict, and other
     # harnesses' scripts can share the same bare filename, which would silently
     # match the wrong Transform if we filtered by key alone. initiated_by_run is
     # collision-proof by construction.
     script_run = ln.Run.filter(initiated_by_run=run).order_by("-created_at").first()
     assert script_run is not None, (
-        "no Run is linked back to the __claudecode__ agent run via initiated_by_run "
+        f"no Run is linked back to the {transform_key} agent run via initiated_by_run "
         "— the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID "
         "set, per the skill's 'Self-tracking scripts' section (or it was saved as a "
         "plain Artifact instead of a Transform, the same class of bug caught earlier)"
     )
+    assert script_run.transform.run is not None, (
+        "lamin finish did not expose the generated script Transform as an output "
+        f"of the {transform_key} agent run"
+    )
+    assert script_run.transform.run.uid == run.uid
 
     fasta_artifact = (
         ln.Artifact.filter(run=script_run, suffix=".fasta")
@@ -94,13 +101,36 @@ def _run_and_verify_claudecode(run_dir: Path) -> None:
     )
 
 
+def _run_and_verify_claudecode(run_dir: Path) -> None:
+    previous_dev_dir = ln.setup.settings.dev_dir
+    ln.setup.settings.dev_dir = run_dir
+    try:
+        result = run_claudecode(run_dir, CLAUDECODE_PROMPT, install_skill=True)
+    finally:
+        ln.setup.settings.dev_dir = previous_dev_dir
+    print(f"\n--- claude stdout ---\n{result.stdout}")
+    _verify_agent_tracking(run_dir, "__claudecode__")
+
+
+def _run_and_verify_copilot(run_dir: Path) -> None:
+    previous_dev_dir = ln.setup.settings.dev_dir
+    ln.setup.settings.dev_dir = run_dir
+    try:
+        result = run_copilot(run_dir, COPILOT_PROMPT, install_skill=True)
+    finally:
+        ln.setup.settings.dev_dir = previous_dev_dir
+    print(f"\n--- copilot stdout ---\n{result.stdout}")
+    _verify_agent_tracking(run_dir, "__copilot__")
+
+
 _HARNESS_RUNNERS = {
     "laminagent": _run_and_verify_laminagent,
     "claudecode": _run_and_verify_claudecode,
+    "copilot": _run_and_verify_copilot,
 }
 
 
-@pytest.mark.parametrize("harness", ["laminagent", "claudecode"])
+@pytest.mark.parametrize("harness", ["laminagent", "claudecode", "copilot"])
 def test_create_favorite_protein_sequence(harness: str) -> None:
     run_dir = Path(TESTDB1_DEV_DIR) / harness
     run_dir.mkdir(parents=True, exist_ok=True)
