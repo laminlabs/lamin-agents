@@ -109,14 +109,14 @@ def run_laminagent(run_dir: str, *args: str) -> subprocess.CompletedProcess[str]
     return _run_cli(["lag", *args], cwd=run_dir)
 
 
-def _install_lamindb_skill(run_dir: Path) -> None:
-    """Copy the lamindb skill from the installed package to run_dir/.claude/skills/."""
+def _install_lamindb_skill(run_dir: Path, skills_dir: Path) -> None:
+    """Copy the packaged lamindb skill into an agent's project skill directory."""
     import shutil
 
     import lamindb
 
     src = Path(lamindb.__file__).parent / ".agents" / "skills" / "lamindb"
-    dst = run_dir / ".claude" / "skills" / "lamindb"
+    dst = run_dir / skills_dir / "lamindb"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dst)
 
@@ -135,7 +135,7 @@ def run_claudecode(
 
     run_dir = Path(run_dir)
     if install_skill:
-        _install_lamindb_skill(run_dir)
+        _install_lamindb_skill(run_dir, Path(".claude/skills"))
 
     env = {**os.environ, "ANTHROPIC_API_KEY": api_key}
     command = [
@@ -146,5 +146,39 @@ def run_claudecode(
         "json",
         "--permission-mode",
         "bypassPermissions",
+    ]
+    return _run_cli(command, cwd=str(run_dir), env=env)
+
+
+def run_copilot(
+    run_dir: str | Path,
+    prompt: str,
+    install_skill: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    load_dotenv(dotenv_path=Path("~/llms.env").expanduser())
+    token = os.getenv("LAMIN_COPILOT_TOKEN")
+    if not token:
+        raise RuntimeError(
+            "LAMIN_COPILOT_TOKEN not set (add to ~/llms.env or as env var)"
+        )
+
+    run_dir = Path(run_dir)
+    if install_skill:
+        _install_lamindb_skill(run_dir, Path(".agents/skills"))
+
+    env = {
+        **os.environ,
+        # Use Copilot's highest-precedence credential variable so the Actions
+        # GITHUB_TOKEN cannot accidentally shadow the dedicated test token.
+        "COPILOT_GITHUB_TOKEN": token,
+        "COPILOT_AUTO_UPDATE": "false",
+    }
+    command = [
+        "copilot",
+        "-p",
+        prompt,
+        "--allow-all",
+        "--no-ask-user",
+        "--secret-env-vars=LAMIN_COPILOT_TOKEN,COPILOT_GITHUB_TOKEN,GITHUB_TOKEN",
     ]
     return _run_cli(command, cwd=str(run_dir), env=env)
