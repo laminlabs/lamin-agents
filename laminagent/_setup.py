@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import lamindb as ln
-from lamin_utils import logger
+from lamindb_setup import logger
 
 SETUP_SCHEMA_NAME = "lag_eval"
 SETUP_REGISTRY_NAME = "LaminAgentEvals"
