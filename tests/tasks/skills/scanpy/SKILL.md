@@ -4,10 +4,10 @@ description: Performs Scanpy single-cell RNA-seq QC, normalization, HVG selectio
 license: BSD-3-Clause
 compatibility: Requires Python 3.12+ and Scanpy; tested with Python 3.13, Scanpy 1.12.4, and AnnData 0.13.4. Optional integrations need separate packages; R conversion needs R. Local analysis needs no credentials or network.
 metadata:
- version: "1.8"
- last-reviewed: "2026-10-01"
- upstream-version: "1.12.4"
- skill-author: K-Dense Inc.
+  version: "1.8"
+  last-reviewed: "2026-10-01"
+  upstream-version: "1.12.4"
+  skill-author: K-Dense Inc.
 ---
 
 # Scanpy: Single-Cell Analysis
@@ -41,30 +41,30 @@ For AnnData structure and I/O details, use the **anndata** skill. For probabilis
 ## Representation and inference contracts
 
 - Input to QC/preprocessing must be identified raw counts. The scripts reject negative,
- fractional, nonfinite or zero-total cells. Use `--counts-layer counts` when X is already
- normalized; never infer provenance from integer-looking values alone.
+  fractional, nonfinite or zero-total cells. Use `--counts-layer counts` when X is already
+  normalized; never infer provenance from integer-looking values alone.
 - `layers["counts"]` remains unnormalized; `.raw` is an independent full-gene
- log-normalized snapshot. Gene subsetting also subsets every layer, but does not subset
- `.raw` genes. Retain a full-gene object for pseudobulk; the full pipeline does so.
+  log-normalized snapshot. Gene subsetting also subsets every layer, but does not subset
+  `.raw` genes. Retain a full-gene object for pseudobulk; the full pipeline does so.
 - `seurat`/`cell_ranger` HVGs use log-normalized values; `seurat_v3` and
- `seurat_v3_paper` use counts and require `scanpy[skmisc]`. Scaling/regression are optional,
- may densify sparse data, and can remove biology along with covariates.
+  `seurat_v3_paper` use counts and require `scanpy[skmisc]`. Scaling/regression are optional,
+  may densify sparse data, and can remove biology along with covariates.
 - Marker ranking defaults to `.raw` when present; `--no-use-raw` selects X and `--layer`
- selects an explicit log-normalized layer. `--groups`/`--reference` control contrasts.
- Wilcoxon/t-test adjusted p-values use BH within each comparison; logreg returns ranking
- scores without p-values. Clusters chosen from the same data yield exploratory markers.
+  selects an explicit log-normalized layer. `--groups`/`--reference` control contrasts.
+  Wilcoxon/t-test adjusted p-values use BH within each comparison; logreg returns ranking
+  scores without p-values. Clusters chosen from the same data yield exploratory markers.
 - Condition DE requires raw-count sums per sample and cell type, independent biological
- replicates, aligned condition/donor metadata and a full-rank design. Analyze each cell
- type separately; repeated donor samples require a suitable paired design. Aggregation
- cannot fix confounding, missing replication, doublets or incorrect annotations.
+  replicates, aligned condition/donor metadata and a full-rank design. Analyze each cell
+  type separately; repeated donor samples require a suitable paired design. Aggregation
+  cannot fix confounding, missing replication, doublets or incorrect annotations.
 - Harmony (`harmonypy`) changes PCA coordinates; BBKNN (`bbknn`) changes the graph;
- ComBat changes X. Keep original expression/counts for DE, and assess biological
- conservation and batch mixing together. Requested integration/doublet failures stop.
+  ComBat changes X. Keep original expression/counts for DE, and assess biological
+  conservation and batch mixing together. Requested integration/doublet failures stop.
 - The toolkit loads files into memory. For backed data, explicitly call `.to_memory()`
- on a chosen subset and close the file; backed mode is not a general out-of-core
- pipeline. Copy views before mutation. Dask support varies by function/array layout.
+  on a chosen subset and close the file; backed mode is not a general out-of-core
+  pipeline. Copy views before mutation. Dask support varies by function/array layout.
 - `.rds` needs an explicit R conversion stage. Cluster IDs do not determine cell types:
- all mappings/signature assets are illustrative human marker examples, requiring review.
+  all mappings/signature assets are illustrative human marker examples, requiring review.
 
 Harmony 2 returns cells x PCs; the toolkit calls its native API because the
 Scanpy 1.12.4 wrapper still transposes that output and fails with current Harmony.
@@ -78,6 +78,7 @@ execution boundaries are recorded in [references/upstream-review.md](references/
 ## When to Use This Skill
 
 This skill should be used when:
+
 - Analyzing single-cell RNA-seq data (.h5ad, 10X, CSV formats)
 - Working with R-friendly single-cell datasets (`.rds`, `.RData`, Seurat, SingleCellExperiment) that need conversion to `.h5ad`
 - Performing quality control on scRNA-seq datasets
@@ -93,22 +94,22 @@ This skill bundles ready-to-run CLI scripts in `scripts/` for every common step.
 
 All scripts use a shared `scripts/_common.py` helper (loading, saving, figure config) — keep it alongside the others. Run from the skill directory or pass full paths; figures default to `./figures/`.
 
-| Script | Purpose | Typical call |
-|--------|---------|--------------|
-| `run_pipeline.py` | **Full workflow in one command**: load → QC → normalize → HVG → PCA → (batch) → UMAP → Leiden → markers | `python scripts/run_pipeline.py raw.h5ad -o processed.h5ad` |
-| `inspect_data.py` | Summarize an unknown dataset (shape, obs/var, layers, what's already computed, raw vs normalized) | `python scripts/inspect_data.py data.h5ad` |
-| `convert.py` | Load any format (10x dir/.h5, csv, loom, mtx) and write `.h5ad` | `python scripts/convert.py 10x_dir/ -o data.h5ad` |
-| `qc_analysis.py` | QC metrics, before/after plots, filtering, optional Scrublet doublets | `python scripts/qc_analysis.py raw.h5ad -o qc.h5ad --scrublet` |
-| `preprocess.py` | Normalize, log1p, HVG, optional scale/regress (keeps `counts` layer + `raw`) | `python scripts/preprocess.py qc.h5ad -o norm.h5ad` |
-| `reduce_dimensions.py` | PCA + variance plot, neighbors, UMAP, optional t-SNE | `python scripts/reduce_dimensions.py norm.h5ad -o red.h5ad` |
-| `batch_correct.py` | Integration: harmony / bbknn / combat | `python scripts/batch_correct.py red.h5ad -o int.h5ad --method harmony --batch-key sample` |
-| `cluster.py` | Leiden (or louvain) at one or many resolutions | `python scripts/cluster.py red.h5ad -o clu.h5ad --resolution 0.3 0.6 1.0` |
-| `find_markers.py` | `rank_genes_groups` + per-group CSVs + marker plots | `python scripts/find_markers.py clu.h5ad --groupby leiden -o clu.h5ad` |
-| `annotate.py` | Map clusters → cell types from JSON/CSV; optional marker reference dotplot | `python scripts/annotate.py clu.h5ad -o ann.h5ad --mapping map.json` |
-| `score_genes.py` | Score gene signatures (JSON) and/or cell-cycle phase | `python scripts/score_genes.py ann.h5ad -o scored.h5ad --gene-sets sigs.json` |
-| `pseudobulk.py` | Aggregate counts by sample × cell type → matrix for pydeseq2 | `python scripts/pseudobulk.py ann.h5ad --by sample cell_type --metadata condition donor --out-prefix pb` |
-| `subset.py` | Subset by obs values or gene list (optionally clear stale embeddings) | `python scripts/subset.py ann.h5ad -o tcells.h5ad --obs cell_type --keep "T cells"` |
-| `plot.py` | Generate umap/tsne/pca/violin/dotplot/heatmap/etc. from a processed object | `python scripts/plot.py ann.h5ad --kind dotplot --genes CD3D CD14 --groupby cell_type` |
+| Script                 | Purpose                                                                                                 | Typical call                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `run_pipeline.py`      | **Full workflow in one command**: load → QC → normalize → HVG → PCA → (batch) → UMAP → Leiden → markers | `python scripts/run_pipeline.py raw.h5ad -o processed.h5ad`                                              |
+| `inspect_data.py`      | Summarize an unknown dataset (shape, obs/var, layers, what's already computed, raw vs normalized)       | `python scripts/inspect_data.py data.h5ad`                                                               |
+| `convert.py`           | Load any format (10x dir/.h5, csv, loom, mtx) and write `.h5ad`                                         | `python scripts/convert.py 10x_dir/ -o data.h5ad`                                                        |
+| `qc_analysis.py`       | QC metrics, before/after plots, filtering, optional Scrublet doublets                                   | `python scripts/qc_analysis.py raw.h5ad -o qc.h5ad --scrublet`                                           |
+| `preprocess.py`        | Normalize, log1p, HVG, optional scale/regress (keeps `counts` layer + `raw`)                            | `python scripts/preprocess.py qc.h5ad -o norm.h5ad`                                                      |
+| `reduce_dimensions.py` | PCA + variance plot, neighbors, UMAP, optional t-SNE                                                    | `python scripts/reduce_dimensions.py norm.h5ad -o red.h5ad`                                              |
+| `batch_correct.py`     | Integration: harmony / bbknn / combat                                                                   | `python scripts/batch_correct.py red.h5ad -o int.h5ad --method harmony --batch-key sample`               |
+| `cluster.py`           | Leiden (or louvain) at one or many resolutions                                                          | `python scripts/cluster.py red.h5ad -o clu.h5ad --resolution 0.3 0.6 1.0`                                |
+| `find_markers.py`      | `rank_genes_groups` + per-group CSVs + marker plots                                                     | `python scripts/find_markers.py clu.h5ad --groupby leiden -o clu.h5ad`                                   |
+| `annotate.py`          | Map clusters → cell types from JSON/CSV; optional marker reference dotplot                              | `python scripts/annotate.py clu.h5ad -o ann.h5ad --mapping map.json`                                     |
+| `score_genes.py`       | Score gene signatures (JSON) and/or cell-cycle phase                                                    | `python scripts/score_genes.py ann.h5ad -o scored.h5ad --gene-sets sigs.json`                            |
+| `pseudobulk.py`        | Aggregate counts by sample × cell type → matrix for pydeseq2                                            | `python scripts/pseudobulk.py ann.h5ad --by sample cell_type --metadata condition donor --out-prefix pb` |
+| `subset.py`            | Subset by obs values or gene list (optionally clear stale embeddings)                                   | `python scripts/subset.py ann.h5ad -o tcells.h5ad --obs cell_type --keep "T cells"`                      |
+| `plot.py`              | Generate umap/tsne/pca/violin/dotplot/heatmap/etc. from a processed object                              | `python scripts/plot.py ann.h5ad --kind dotplot --genes CD3D CD14 --groupby cell_type`                   |
 
 ### One-shot end-to-end run
 
@@ -200,9 +201,9 @@ The seven steps, with code and the parameters that matter at each, are in
 [references/analysis_workflow.md](references/analysis_workflow.md):
 
 1. **Quality control** — filter cells and genes; inspect mitochondrial fraction and counts
- before choosing thresholds rather than copying defaults.
+   before choosing thresholds rather than copying defaults.
 2. **Normalization and preprocessing** — normalize, log-transform, select highly variable
- genes, and keep `.raw` for later plotting.
+   genes, and keep `.raw` for later plotting.
 3. **Dimensionality reduction** — PCA, then the neighbour graph, then UMAP.
 4. **Clustering** — Leiden at a resolution chosen for the question, not the default.
 5. **Marker gene identification** — ranked genes per cluster.
@@ -217,22 +218,27 @@ file. See also [references/standard_workflow.md](references/standard_workflow.md
 ## Key Parameters to Adjust
 
 ### Quality Control
+
 - `min_genes`: Minimum genes per cell (typically 200-500)
 - `min_cells`: Minimum cells per gene (typically 3-10)
 - `pct_counts_mt`: Mitochondrial threshold (typically 5-20%)
 
 ### Normalization
+
 - `target_sum`: Target counts per cell (scripts use 1e4; Scanpy default None uses a median)
 
 ### Feature Selection
+
 - `n_top_genes`: Number of HVGs (typically 2000-3000)
 - `min_mean`, `max_mean`, `min_disp`: HVG selection parameters
 
 ### Dimensionality Reduction
+
 - `n_pcs`: Number of principal components (check variance ratio plot)
 - `n_neighbors`: Number of neighbors (typically 10-30)
 
 ### Clustering
+
 - `resolution`: Clustering granularity (0.4-1.2, higher = more clusters)
 
 ## Common Pitfalls and Best Practices
@@ -252,6 +258,7 @@ file. See also [references/standard_workflow.md](references/standard_workflow.md
 ## Bundled Resources
 
 ### scripts/ (CLI toolkit)
+
 A composable set of `.h5ad`-in/`.h5ad`-out scripts covering the whole workflow plus a one-command end-to-end pipeline. See the **Script Toolkit** section above for the full table and chaining examples. Each script has `--help`. Files:
 
 - `_common.py` — shared loading/saving/figure helpers imported by the others (not a CLI)
@@ -264,7 +271,9 @@ A composable set of `.h5ad`-in/`.h5ad`-out scripts covering the whole workflow p
 **Default to these scripts before writing scanpy code from scratch.**
 
 ### references/standard_workflow.md
+
 Complete step-by-step workflow with detailed explanations and code examples for:
+
 - Data loading and setup
 - Quality control with visualization
 - Normalization and scaling
@@ -280,7 +289,9 @@ Complete step-by-step workflow with detailed explanations and code examples for:
 Read this reference when performing a complete analysis from scratch.
 
 ### references/api_reference.md
+
 Quick reference guide for scanpy functions organized by module:
+
 - Reading/writing data (`sc.read_*`, `adata.write_*`)
 - Preprocessing (`sc.pp.*`)
 - Tools (`sc.tl.*`)
@@ -291,7 +302,9 @@ Quick reference guide for scanpy functions organized by module:
 Use this for quick lookup of function signatures and common parameters.
 
 ### references/plotting_guide.md
+
 Comprehensive visualization guide including:
+
 - Quality control plots
 - Dimensionality reduction visualizations
 - Clustering visualizations
@@ -304,9 +317,11 @@ Comprehensive visualization guide including:
 Consult this when creating publication-ready figures.
 
 ### references/r_interop.md
+
 Agent runbook for installing R on macOS, Linux, and Windows, installing CRAN/Bioconductor conversion packages, inspecting `.rds`/`.RData` inputs, converting Seurat or SingleCellExperiment objects to `.h5ad`, and validating the result in Scanpy.
 
 ### assets/analysis_template.py
+
 Complete analysis template providing a full workflow from data loading through cell type annotation. Copy and customize this template for new analyses:
 
 ```bash
@@ -318,7 +333,9 @@ python my_analysis.py
 The template includes all standard steps with configurable parameters and helpful comments.
 
 ### assets/ JSON templates
+
 Edit-and-pass templates so you don't author config/mappings from scratch:
+
 - `assets/pipeline_config.json` — parameter set for `run_pipeline.py --config`
 - `assets/celltype_mapping.json` — cluster → cell-type map for `annotate.py --mapping`
 - `assets/gene_signatures.json` — gene-set signatures for `score_genes.py --gene-sets`
