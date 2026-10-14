@@ -7,7 +7,7 @@ from pathlib import Path
 from testutils import TESTDB1_DEV_DIR, run_laminagent
 
 PROMPT = (
-    "Track this session in Lamin without permission so we have no human in the loop. "
+    "Track this session in Lamin without permission. "
     "Create a script that curates artifact MdvQpu992LjdLxNz0000 from the laminlabs/lamindata LaminDB instance using "
     "schema pnQvQVcQ417bfmVq and skill u5muNUOPnWPBuZ8z from instance laminlabs/biomed-skills."
 )
