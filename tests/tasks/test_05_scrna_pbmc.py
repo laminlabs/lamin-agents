@@ -38,7 +38,7 @@ _CELL_TYPE_MARKERS = {
     "megakaryocyte": {"PPBP", "PF4", "SDPR", "ITGA2B", "RGS18"},
 }
 PROMPT = (
-    "Don't ask for confirmations, track the session. "
+    "Track this session in Lamin without permission so we have no human in the loop. "
     "Write a Python script called scrna_pbmc3k.py that runs a full single-cell "
     "RNA-seq analysis on the PBMC3k dataset already available at pbmc3k_raw.h5ad "
     "in the current directory. The analysis must cover:\n\n"
