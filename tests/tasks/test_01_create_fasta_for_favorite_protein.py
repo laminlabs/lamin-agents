@@ -8,6 +8,7 @@ from testutils import (
     TESTDB1_DEV_DIR,
     assert_single_valid_script,
     assert_valid_fasta_outputs,
+    tracked_branch,
     run_claudecode,
     run_copilot,
     run_laminagent,
@@ -61,10 +62,17 @@ def _run_and_verify_laminagent(run_dir: Path) -> None:
 
 def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
     """Verify the end-to-end tracking contract shared by coding-agent skills."""
-    transform = ln.Transform.filter(key=transform_key).one_or_none()
-    assert transform is not None, f"skill never created the {transform_key} transform"
-    run = ln.Run.filter(transform=transform).order_by("-created_at").first()
-    assert run is not None, f"no Run found for the {transform_key} transform"
+    branch = tracked_branch(run_dir)
+    transform = ln.Transform.filter(key=transform_key, branch=branch).one_or_none()
+    assert transform is not None, (
+        f"skill never created the {transform_key} transform on branch {branch.name}"
+    )
+    run = (
+        ln.Run.filter(transform=transform, branch=branch).order_by("-created_at").first()
+    )
+    assert run is not None, (
+        f"no Run found for the {transform_key} transform on branch {branch.name}"
+    )
     assert run.report is not None, "skill did not save a run.report"
     assert run.finished_at is not None, "skill never closed the run (Step 3 skipped)"
 
@@ -76,7 +84,11 @@ def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
     # harnesses' scripts can share the same bare filename, which would silently
     # match the wrong Transform if we filtered by key alone. initiated_by_run is
     # collision-proof by construction.
-    script_run = ln.Run.filter(initiated_by_run=run).order_by("-created_at").first()
+    script_run = (
+        ln.Run.filter(initiated_by_run=run, branch=branch)
+        .order_by("-created_at")
+        .first()
+    )
     assert script_run is not None, (
         f"no Run is linked back to the {transform_key} agent run via initiated_by_run "
         "— the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID "
@@ -90,7 +102,7 @@ def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
     assert script_run.transform.run.uid == run.uid
 
     fasta_artifact = (
-        ln.Artifact.filter(run=script_run, suffix=".fasta")
+        ln.Artifact.filter(run=script_run, suffix=".fasta", branch=branch)
         .order_by("-created_at")
         .first()
     )
