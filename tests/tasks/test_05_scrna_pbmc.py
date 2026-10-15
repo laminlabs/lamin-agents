@@ -137,10 +137,10 @@ def test_scrna_pbmc3k() -> None:
 
     # --- LaminDB lineage checks ---
     branch = tracked_branch(RUN_DIR)
-    transform = ln.Transform.filter(key="__claudecode__", branch=branch).one_or_none()
-    assert transform is not None, (
-        f"skill never created the __claudecode__ transform on branch {branch.name}"
-    )
+    # the __claudecode__ transform is created once per database on main and reused,
+    # so it lives on main regardless of which branch the agent switched to
+    transform = ln.Transform.filter(key="__claudecode__").one_or_none()
+    assert transform is not None, "skill never created the __claudecode__ transform"
     run = (
         ln.Run.filter(transform=transform, branch=branch)
         .order_by("-created_at")
