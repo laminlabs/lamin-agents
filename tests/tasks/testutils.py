@@ -160,6 +160,35 @@ def _install_lamindb_skill(run_dir: Path, skills_dir: Path) -> None:
     shutil.copytree(src, dst)
 
 
+def _install_local_skill(
+    run_dir: Path,
+    skill_src: Path,
+    skills_dir: Path = Path(".claude/skills"),
+) -> None:
+    """Copy a local skill directory into an agent's project skill directory.
+
+    Args:
+        run_dir: The agent's working directory.
+        skill_src: Path to the local skill directory (must contain SKILL.md).
+            The directory name becomes the skill name under ``skills_dir``.
+        skills_dir: Relative path inside ``run_dir`` where skills live.
+            Defaults to ``.claude/skills`` (Claude Code convention).
+    """
+    import shutil
+
+    dst = run_dir / skills_dir / skill_src.name
+    if dst.exists():
+        shutil.rmtree(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(skill_src, dst)
+
+
+def _install_scrna_skill(run_dir: Path) -> None:
+    """Copy the K-Dense scanpy scRNA skill into run_dir/.claude/skills/."""
+    src = Path(__file__).parent / "skills" / "scanpy"
+    _install_local_skill(run_dir, src)
+
+
 def run_claudecode(
     run_dir: str | Path,
     prompt: str,
