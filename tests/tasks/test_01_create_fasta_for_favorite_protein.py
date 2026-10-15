@@ -8,10 +8,10 @@ from testutils import (
     TESTDB1_DEV_DIR,
     assert_single_valid_script,
     assert_valid_fasta_outputs,
-    tracked_branch,
     run_claudecode,
     run_copilot,
     run_laminagent,
+    tracked_branch,
 )
 
 EXAMPLE_UID = "RL6ZsKnHZvlhDg1d"
@@ -68,7 +68,9 @@ def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
         f"skill never created the {transform_key} transform on branch {branch.name}"
     )
     run = (
-        ln.Run.filter(transform=transform, branch=branch).order_by("-created_at").first()
+        ln.Run.filter(transform=transform, branch=branch)
+        .order_by("-created_at")
+        .first()
     )
     assert run is not None, (
         f"no Run found for the {transform_key} transform on branch {branch.name}"

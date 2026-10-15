@@ -156,7 +156,9 @@ def test_scrna_pbmc3k() -> None:
         f"skill never created the __claudecode__ transform on branch {branch.name}"
     )
     run = (
-        ln.Run.filter(transform=transform, branch=branch).order_by("-created_at").first()
+        ln.Run.filter(transform=transform, branch=branch)
+        .order_by("-created_at")
+        .first()
     )
     assert run is not None, (
         f"no Run found for the __claudecode__ transform on branch {branch.name}"
@@ -166,7 +168,9 @@ def test_scrna_pbmc3k() -> None:
     )
 
     script_run = (
-        ln.Run.filter(initiated_by_run=run, branch=branch).order_by("-created_at").first()
+        ln.Run.filter(initiated_by_run=run, branch=branch)
+        .order_by("-created_at")
+        .first()
     )
     assert script_run is not None, (
         "no Run is linked back to the __claudecode__ agent run via initiated_by_run — "
