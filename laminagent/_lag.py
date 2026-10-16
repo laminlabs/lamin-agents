@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import click
 import lamindb as ln
 from dotenv import load_dotenv
-from lamin_utils import logger
+from lamindb_setup import logger
 
 try:
     from rich.console import Console
