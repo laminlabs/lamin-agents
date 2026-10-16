@@ -45,7 +45,9 @@ _CELL_TYPE_MARKERS = {
 PROMPT = (
     "Track this session in Lamin without permission. "
     "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
-    "Preserve raw counts in adata.layers['counts']. After normalization and HVG "
+    "Preserve raw counts in adata.layers['counts']. Select 2000 highly variable "
+    "genes using sc.pp.highly_variable_genes with flavor='seurat_v3', "
+    "layer='counts', and n_top_genes=2000. After normalization and HVG "
     "selection, scale the expression values and save a copy in "
     "adata.layers['scaled'] before PCA. Keep a log-normalized expression "
     "snapshot in adata.raw for marker ranking. "

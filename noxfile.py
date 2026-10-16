@@ -44,7 +44,7 @@ def test(session: nox.Session, group: str) -> None:
             "numpy",
             "openpyxl",
             "requests",
-            "scanpy",
+            "scanpy[skmisc]",
             "anndata",
             "leidenalg",
             external=True,
