@@ -45,6 +45,10 @@ _CELL_TYPE_MARKERS = {
 PROMPT = (
     "Track this session in Lamin without permission. "
     "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
+    "Preserve raw counts in adata.layers['counts']. After normalization and HVG "
+    "selection, scale the expression values and save a copy in "
+    "adata.layers['scaled'] before PCA. Keep a log-normalized expression "
+    "snapshot in adata.raw for marker ranking. "
     "Write the script as scrna_pbmc3k.py and run it. "
     "Save the result as pbmc3k_processed.h5ad with LaminDB key 'scrna/pbmc3k_processed.h5ad', "
     "cell types in obs['cell_type'], and a UMAP plot as umap_cell_type.png."
