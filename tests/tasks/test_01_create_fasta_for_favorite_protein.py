@@ -63,10 +63,9 @@ def _run_and_verify_laminagent(run_dir: Path) -> None:
 def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
     """Verify the end-to-end tracking contract shared by coding-agent skills."""
     branch = tracked_branch(run_dir)
-    transform = ln.Transform.filter(key=transform_key, branch=branch).one_or_none()
-    assert transform is not None, (
-        f"skill never created the {transform_key} transform on branch {branch.name}"
-    )
+    # The shared transform stays on whichever branch first created it.
+    transform = ln.Transform.filter(key=transform_key, branch=None).one_or_none()
+    assert transform is not None, f"skill never created the {transform_key} transform"
     run = (
         ln.Run.filter(transform=transform, branch=branch)
         .order_by("-created_at")
