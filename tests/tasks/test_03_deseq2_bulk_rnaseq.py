@@ -15,7 +15,6 @@ SKILL_UID = "XarPyl1XCgZwSQmY0000"
 SKILL_INSTANCE = "laminlabs/lamin-skills"
 
 PROMPT = (
-    "Track this session in Lamin without permission. "
     "Write a Python script that performs DESeq2 bulk RNA-seq analysis "
     "following the skill. Write the script to the current directory. "
     "Do NOT run or execute the script — only write it."

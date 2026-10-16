@@ -32,45 +32,6 @@ def assert_single_valid_script(run_dir: Path) -> Path:
     return script
 
 
-def _tracked_branch_name(run_dir: Path) -> str:
-    """Read the branch the agent switched to for this run directory."""
-    from lamindb_setup.core._settings_store import local_current_branch_file
-
-    directory = Path(run_dir).resolve()
-    root = Path(TESTDB1_DEV_DIR).resolve()
-    saw_main = False
-    while True:
-        branch_file = local_current_branch_file(directory)
-        if branch_file.is_file():
-            parts = branch_file.read_text().splitlines()
-            name = parts[1].strip() if len(parts) >= 2 else ""
-            if name and name != "main":
-                return name
-            saw_main = saw_main or name == "main"
-        if directory == root or directory.parent == directory:
-            break
-        if directory != root and root not in directory.parents:
-            break
-        directory = directory.parent
-    if saw_main:
-        return "main"
-    raise AssertionError(
-        f"no Lamin branch file under {run_dir}; the agent did not switch branches"
-    )
-
-
-def tracked_branch(run_dir: str | Path):
-    """Return the branch `lamin switch` wrote for this run.
-
-    The test process stays on main. Pass this branch into `.filter()` or the
-    query only sees records on main.
-    """
-    import lamindb as ln
-
-    branch_name = _tracked_branch_name(Path(run_dir))
-    return ln.Branch.get(name=branch_name)
-
-
 def assert_valid_fasta_outputs(run_dir: Path) -> list[Path]:
     """Assert at least one .fasta file exists under run_dir and each is valid FASTA."""
     fasta_files = list(run_dir.rglob("*.fasta"))
@@ -158,35 +119,6 @@ def _install_lamindb_skill(run_dir: Path, skills_dir: Path) -> None:
     dst = run_dir / skills_dir / "lamindb"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dst)
-
-
-def _install_local_skill(
-    run_dir: Path,
-    skill_src: Path,
-    skills_dir: Path = Path(".claude/skills"),
-) -> None:
-    """Copy a local skill directory into an agent's project skill directory.
-
-    Args:
-        run_dir: The agent's working directory.
-        skill_src: Path to the local skill directory (must contain SKILL.md).
-            The directory name becomes the skill name under ``skills_dir``.
-        skills_dir: Relative path inside ``run_dir`` where skills live.
-            Defaults to ``.claude/skills`` (Claude Code convention).
-    """
-    import shutil
-
-    dst = run_dir / skills_dir / skill_src.name
-    if dst.exists():
-        shutil.rmtree(dst)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(skill_src, dst)
-
-
-def _install_scrna_skill(run_dir: Path) -> None:
-    """Copy the K-Dense scanpy scRNA skill into run_dir/.claude/skills/."""
-    src = Path(__file__).parent / "skills" / "scanpy"
-    _install_local_skill(run_dir, src)
 
 
 def run_claudecode(

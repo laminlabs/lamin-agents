@@ -3,12 +3,7 @@ from pathlib import Path
 import anndata as ad
 import lamindb as ln
 import scanpy as sc
-from testutils import (
-    TESTDB1_DEV_DIR,
-    _install_scrna_skill,
-    run_claudecode,
-    tracked_branch,
-)
+from testutils import TESTDB1_DEV_DIR, run_claudecode
 
 # Known stable HVGs in PBMC3k under seurat_v3 / n_top_genes=2000.
 # These span all major cell types and should always rank as highly variable.
@@ -43,17 +38,31 @@ _CELL_TYPE_MARKERS = {
     "megakaryocyte": {"PPBP", "PF4", "SDPR", "ITGA2B", "RGS18"},
 }
 PROMPT = (
-    "Track this session in Lamin without permission. "
-    "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
-    "Preserve raw counts in adata.layers['counts']. Select 2000 highly variable "
-    "genes using sc.pp.highly_variable_genes with flavor='seurat_v3', "
-    "layer='counts', and n_top_genes=2000. After normalization and HVG "
-    "selection, scale the expression values and save a copy in "
-    "adata.layers['scaled'] before PCA. Keep a log-normalized expression "
-    "snapshot in adata.raw for marker ranking. "
-    "Write the script as scrna_pbmc3k.py and run it. "
-    "Save the result as pbmc3k_processed.h5ad with LaminDB key 'scrna/pbmc3k_processed.h5ad', "
-    "cell types in obs['cell_type'], and a UMAP plot as umap_cell_type.png."
+    "Don't ask for confirmations, track the session. "
+    "Write a Python script called scrna_pbmc3k.py that runs a full single-cell "
+    "RNA-seq analysis on the PBMC3k dataset already available at pbmc3k_raw.h5ad "
+    "in the current directory. The analysis must cover:\n\n"
+    "1. QC: filter low-quality cells and genes, annotate mitochondrial genes, "
+    "compute QC metrics, and filter on gene count and mitochondrial content. "
+    "Preserve the raw counts in a dedicated layer.\n\n"
+    "2. Normalization and log-transformation.\n\n"
+    "3. Highly variable gene selection (~2000 genes, using the counts layer). "
+    "Subset the object to only the highly variable genes before any further steps.\n\n"
+    "4. Regress out technical confounders and scale, storing the result in a separate layer.\n\n"
+    "5. Dimensionality reduction, graph construction, Leiden clustering, and UMAP "
+    "initialized from PAGA. Ensure PCA coordinates, UMAP coordinates, and Leiden "
+    "labels are all stored on the object.\n\n"
+    "6. Marker gene analysis per cluster (Wilcoxon test). "
+    "run it and ensure the results are stored on the AnnData object before saving. "
+    "Print the top genes per cluster.\n\n"
+    "7. Cell type annotation: inspect the marker genes and assign a biologically "
+    "meaningful cell type label to each cluster, storing it in obs['cell_type']. "
+    "Expected PBMC populations include CD4 T, CD8 T, NK, B cells, CD14+ Monocytes, "
+    "FCGR3A+ Monocytes, Dendritic Cells, and Megakaryocytes — use these as a guide "
+    "based on the actual markers, not as a hard-coded map.\n\n"
+    "Save a UMAP coloured by cell_type as umap_cell_type.png. "
+    "Save the final AnnData as pbmc3k_processed.h5ad and register it as a LaminDB "
+    "artifact with the key 'scrna/pbmc3k_processed.h5ad'. "
 )
 
 RUN_DIR = Path(f"{TESTDB1_DEV_DIR}/test_05")
@@ -137,41 +146,26 @@ def test_scrna_pbmc3k() -> None:
         adata = sc.datasets.pbmc3k()
         adata.write_h5ad(raw_path)
 
-    _install_scrna_skill(RUN_DIR)
     result = run_claudecode(RUN_DIR, PROMPT, install_skill=True)
     print(f"\n--- claude stdout ---\n{result.stdout}")
 
     # --- LaminDB lineage checks ---
-    branch = tracked_branch(RUN_DIR)
-    # The shared transform stays on whichever branch first created it.
-    transform = ln.Transform.filter(key="__claudecode__", branch=None).one_or_none()
+    transform = ln.Transform.filter(key="__claudecode__").one_or_none()
     assert transform is not None, "skill never created the __claudecode__ transform"
-    run = (
-        ln.Run.filter(transform=transform, branch=branch)
-        .order_by("-created_at")
-        .first()
-    )
-    assert run is not None, (
-        f"no Run found for the __claudecode__ transform on branch {branch.name}"
-    )
+    run = ln.Run.filter(transform=transform).order_by("-created_at").first()
+    assert run is not None, "no Run found for the __claudecode__ transform"
     assert run.finished_at is not None, (
         "skill did not close the run (ln.finish() was not called)"
     )
 
-    script_run = (
-        ln.Run.filter(initiated_by_run=run, branch=branch)
-        .order_by("-created_at")
-        .first()
-    )
+    script_run = ln.Run.filter(initiated_by_run=run).order_by("-created_at").first()
     assert script_run is not None, (
         "no Run is linked back to the __claudecode__ agent run via initiated_by_run — "
         "the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID set"
     )
 
     h5ad_artifact = (
-        ln.Artifact.filter(
-            run=script_run, key="scrna/pbmc3k_processed.h5ad", branch=branch
-        )
+        ln.Artifact.filter(run=script_run, key="scrna/pbmc3k_processed.h5ad")
         .order_by("-created_at")
         .first()
     )

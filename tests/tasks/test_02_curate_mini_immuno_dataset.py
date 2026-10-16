@@ -4,12 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import lamindb as ln
-from lamindb.models.feature import parse_dtype
 from testutils import TESTDB1_DEV_DIR, run_laminagent
 
 PROMPT = (
-    "Track this session in Lamin without permission. "
     "Create a script that curates artifact MdvQpu992LjdLxNz0000 from the laminlabs/lamindata LaminDB instance using "
     "schema pnQvQVcQ417bfmVq and skill u5muNUOPnWPBuZ8z from instance laminlabs/biomed-skills."
 )
@@ -21,16 +18,6 @@ def test_curate_mini_immuno() -> None:
     if RUN_DIR.exists():
         shutil.rmtree(RUN_DIR)
     RUN_DIR.mkdir(parents=True)
-
-    # Schema transfer copies the subtype, but not its valid labels. Import the
-    # reference values so validation rejects only the intentional IFNJ typo.
-    db = ln.DB("laminlabs/lamindata")
-    schema = db.Schema.get("pnQvQVcQ417bfmVq").save()
-    dtype = schema.members.get(name="perturbation").dtype_as_str
-    perturbation_type = db.Record.get(parse_dtype(dtype)[0]["type_uid"])
-    for label in db.Record.filter(type=perturbation_type, name__in=["DMSO", "IFNG"]):
-        label.save()
-
     # step 1: write the curation script
     result = run_laminagent(RUN_DIR, "prompt", PROMPT)
     print(f"\n--- agent stdout ---\n{result.stdout}")
