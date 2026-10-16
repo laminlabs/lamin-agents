@@ -60,7 +60,9 @@ def _run_and_verify_laminagent(run_dir: Path) -> None:
     )
 
 
-def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
+def _verify_agent_tracking(
+    run_dir: Path, transform_key: str, previous_transform_runs: dict[str, int | None]
+) -> None:
     """Verify the end-to-end tracking contract shared by coding-agent skills."""
     branch = tracked_branch(run_dir)
     # The shared transform stays on whichever branch first created it.
@@ -100,10 +102,24 @@ def _verify_agent_tracking(run_dir: Path, transform_key: str) -> None:
         "lamin finish did not expose the generated script Transform as an output "
         f"of the {transform_key} agent run"
     )
-    assert script_run.transform.run.uid == run.uid
+    # Reused transforms retain their original creator. New or previously
+    # unstamped transforms must be attributed to this agent session.
+    expected_creator_id = (
+        previous_transform_runs.get(script_run.transform.uid) or run.id
+    )
+    assert script_run.transform.run_id == expected_creator_id, (
+        "script Transform must retain its original creator or be attributed "
+        "to the current agent run if it had none"
+    )
 
+    # Identical content can reuse an artifact from any branch. Require an output
+    # relationship to this script run, whether it created or recreated the FASTA.
     fasta_artifact = (
-        ln.Artifact.filter(run=script_run, suffix=".fasta", branch=branch)
+        ln.Artifact.filter(
+            ln.Q(run=script_run) | ln.Q(recreating_runs=script_run),
+            suffix=".fasta",
+            branch=None,
+        )
         .order_by("-created_at")
         .first()
     )
@@ -118,22 +134,28 @@ def _run_and_verify_claudecode(run_dir: Path) -> None:
     previous_dev_dir = ln.setup.settings.dev_dir
     ln.setup.settings.dev_dir = run_dir
     try:
+        previous_transform_runs = dict(
+            ln.Transform.filter(branch=None).values_list("uid", "run_id")
+        )
         result = run_claudecode(run_dir, CLAUDECODE_PROMPT, install_skill=True)
     finally:
         ln.setup.settings.dev_dir = previous_dev_dir
     print(f"\n--- claude stdout ---\n{result.stdout}")
-    _verify_agent_tracking(run_dir, "__claudecode__")
+    _verify_agent_tracking(run_dir, "__claudecode__", previous_transform_runs)
 
 
 def _run_and_verify_copilot(run_dir: Path) -> None:
     previous_dev_dir = ln.setup.settings.dev_dir
     ln.setup.settings.dev_dir = run_dir
     try:
+        previous_transform_runs = dict(
+            ln.Transform.filter(branch=None).values_list("uid", "run_id")
+        )
         result = run_copilot(run_dir, COPILOT_PROMPT, install_skill=True)
     finally:
         ln.setup.settings.dev_dir = previous_dev_dir
     print(f"\n--- copilot stdout ---\n{result.stdout}")
-    _verify_agent_tracking(run_dir, "__copilot__")
+    _verify_agent_tracking(run_dir, "__copilot__", previous_transform_runs)
 
 
 _HARNESS_RUNNERS = {
