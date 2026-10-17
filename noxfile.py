@@ -1,6 +1,7 @@
 import os
 
 import nox
+from laminci import upload_docs_artifact
 from laminci.nox import install_lamindb, run_pre_commit
 
 # we'd like to aggregate coverage information across sessions
@@ -63,3 +64,8 @@ def test(session: nox.Session, group: str) -> None:
             "--cov-report=term-missing",
         ]
     session.run("pytest", "-s", f"tests/{group}", *coverage_args)
+
+
+@nox.session
+def docs(_session: nox.Session) -> None:
+    upload_docs_artifact()
