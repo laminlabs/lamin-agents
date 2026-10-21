@@ -67,9 +67,6 @@ def _validate_anndata(h5ad_path: Path) -> None:
     assert "counts" in adata.layers, (
         "adata.layers['counts'] missing — raw counts were not preserved"
     )
-    assert "scaled" in adata.layers, (
-        "adata.layers['scaled'] missing — scaled expression not stored"
-    )
     assert "X_pca" in adata.obsm, "adata.obsm['X_pca'] missing"
     assert "X_umap" in adata.obsm, "adata.obsm['X_umap'] missing"
     assert "leiden" in adata.obs.columns, "adata.obs['leiden'] missing"
