@@ -46,8 +46,9 @@ PROMPT = (
     "Track this session in Lamin without permission. "
     "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
     "Write the script as scrna_pbmc3k.py and run it. "
-    "Save the result as pbmc3k_processed.h5ad with LaminDB key 'scrna/pbmc3k_processed.h5ad', "
-    "cell types in obs['cell_type'], and a UMAP plot as umap_cell_type.png."
+    "Register the processed AnnData with ln.Artifact.from_anndata using the key "
+    "'scrna/pbmc3k_processed.h5ad'. Writing pbmc3k_processed.h5ad to disk is not enough. "
+    "Store cell types in obs['cell_type'] and register a UMAP plot as umap_cell_type.png."
 )
 
 RUN_DIR = Path(f"{TESTDB1_DEV_DIR}/test_05")
@@ -162,13 +163,12 @@ def test_scrna_pbmc3k() -> None:
         "the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID set"
     )
 
-    # The script chooses the key and may save on the branch that owns the run,
-    # so match the processed file by name across branches and both session runs.
+    # from_anndata may use a different key, and the artifact may sit on either
+    # session run, so match any .h5ad attached to this session.
     h5ad_artifact = None
     for candidate in (script_run, run):
         h5ad_artifact = (
-            ln.Artifact.filter(run=candidate, branch=None)
-            .filter(key__endswith="pbmc3k_processed.h5ad")
+            ln.Artifact.filter(run=candidate, suffix=".h5ad", branch=None)
             .order_by("-created_at")
             .first()
         )
