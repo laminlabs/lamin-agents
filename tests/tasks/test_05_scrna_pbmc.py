@@ -131,22 +131,36 @@ def test_scrna_pbmc3k() -> None:
     print(f"\n--- claude stdout ---\n{result.stdout}")
 
     # --- LaminDB lineage checks ---
-    transform = ln.Transform.filter(key="__claudecode__").one_or_none()
+    branch = tracked_branch(RUN_DIR)
+    # The shared transform stays on whichever branch first created it.
+    transform = ln.Transform.filter(key="__claudecode__", branch=None).one_or_none()
     assert transform is not None, "skill never created the __claudecode__ transform"
-    run = ln.Run.filter(transform=transform).order_by("-created_at").first()
-    assert run is not None, "no Run found for the __claudecode__ transform"
+    run = (
+        ln.Run.filter(transform=transform, branch=branch)
+        .order_by("-created_at")
+        .first()
+    )
+    assert run is not None, (
+        f"no Run found for the __claudecode__ transform on branch {branch.name}"
+    )
     assert run.finished_at is not None, (
         "skill did not close the run (ln.finish() was not called)"
     )
 
-    script_run = ln.Run.filter(initiated_by_run=run).order_by("-created_at").first()
+    script_run = (
+        ln.Run.filter(initiated_by_run=run, branch=branch)
+        .order_by("-created_at")
+        .first()
+    )
     assert script_run is not None, (
         "no Run is linked back to the __claudecode__ agent run via initiated_by_run — "
         "the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID set"
     )
 
     h5ad_artifact = (
-        ln.Artifact.filter(run=script_run, key="scrna/pbmc3k_processed.h5ad")
+        ln.Artifact.filter(
+            run=script_run, key="scrna/pbmc3k_processed.h5ad", branch=branch
+        )
         .order_by("-created_at")
         .first()
     )
