@@ -11,7 +11,7 @@ _MOESM7_URL = (
     "s41467-022-28120-2/MediaObjects/41467_2022_28120_MOESM7_ESM.xlsx"
 )
 
-SKILL_UID = "XarPyl1XCgZwSQmY0000"
+SKILL_UID = "XarPyl1XCgZwSQmY"
 SKILL_INSTANCE = "laminlabs/lamin-skills"
 
 PROMPT = (
