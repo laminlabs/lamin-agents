@@ -38,7 +38,7 @@ _CELL_TYPE_MARKERS = {
     "megakaryocyte": {"PPBP", "PF4", "SDPR", "ITGA2B", "RGS18"},
 }
 PROMPT = (
-    "Yes, track this session in LaminDB. "
+    "Track this session in Lamin without permission. "
     "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
     "Write the script as scrna_pbmc3k.py and run it. "
     "Save the result as pbmc3k_processed.h5ad with LaminDB key 'scrna/pbmc3k_processed.h5ad', "

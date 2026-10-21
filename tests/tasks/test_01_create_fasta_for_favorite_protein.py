@@ -20,8 +20,7 @@ LAMINAGENT_PROMPT = (
     "and saves it as a LaminDB artifact."
 )
 CLAUDECODE_PROMPT = (
-    "For this automated test, I explicitly consent to LaminDB tracking. "
-    "Don't ask for confirmations; track the session and continue. "
+    "Track this session in Lamin without permission. "
     "Write a Python script called save_protein.py in the current directory that "
     "writes your favorite protein sequence to a file called protein.fasta and "
     "saves it as a LaminDB artifact. Then run the script."
