@@ -3,7 +3,7 @@
 Below are four examples of agentic analyses using popular harnesses.
 They illustrate how LaminDB tracks an agent's tool authoring and orchestration along with a transcript.
 
-The source and tests for this are on GitHub
+The source and tests for this are on GitHub: https://github.com/laminlabs/lamin-agents
 
 ```{toctree}
 :maxdepth: 1
