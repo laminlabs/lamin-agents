@@ -18,7 +18,10 @@ PROMPT = (
     "Track this session in Lamin without permission. "
     "Write a Python script that performs DESeq2 bulk RNA-seq analysis "
     "following the skill. Write the script to the current directory. "
-    "Do NOT run or execute the script — only write it."
+    "Do NOT run or execute the script — only write it. "
+    "Register every LaminDB artifact from the local file path, as in "
+    "ln.Artifact('moesm7.xlsx', description=...).save(). "
+    "Do not pass a data= argument; Artifact no longer accepts it."
 )
 
 RUN_DIR = Path(f"{TESTDB1_DEV_DIR}/test_03")

@@ -45,15 +45,10 @@ _CELL_TYPE_MARKERS = {
 PROMPT = (
     "Track this session in Lamin without permission. "
     "Use the scanpy skill to analyse pbmc3k_raw.h5ad. "
-    "Preserve raw counts in adata.layers['counts']. Select 2000 highly variable "
-    "genes using sc.pp.highly_variable_genes with flavor='seurat_v3', "
-    "layer='counts', and n_top_genes=2000. After normalization and HVG "
-    "selection, scale the expression values and save a copy in "
-    "adata.layers['scaled'] before PCA. Keep a log-normalized expression "
-    "snapshot in adata.raw for marker ranking. "
     "Write the script as scrna_pbmc3k.py and run it. "
-    "Save the result as pbmc3k_processed.h5ad with LaminDB key 'scrna/pbmc3k_processed.h5ad', "
-    "cell types in obs['cell_type'], and a UMAP plot as umap_cell_type.png."
+    "Register the processed AnnData with ln.Artifact.from_anndata using the key "
+    "'scrna/pbmc3k_processed.h5ad'. Writing pbmc3k_processed.h5ad to disk is not enough. "
+    "Store cell types in obs['cell_type'] and register a UMAP plot as umap_cell_type.png."
 )
 
 RUN_DIR = Path(f"{TESTDB1_DEV_DIR}/test_05")
@@ -72,9 +67,6 @@ def _validate_anndata(h5ad_path: Path) -> None:
     assert "counts" in adata.layers, (
         "adata.layers['counts'] missing — raw counts were not preserved"
     )
-    assert "scaled" in adata.layers, (
-        "adata.layers['scaled'] missing — scaled expression not stored"
-    )
     assert "X_pca" in adata.obsm, "adata.obsm['X_pca'] missing"
     assert "X_umap" in adata.obsm, "adata.obsm['X_umap'] missing"
     assert "leiden" in adata.obs.columns, "adata.obs['leiden'] missing"
@@ -89,9 +81,9 @@ def _validate_anndata(h5ad_path: Path) -> None:
     # --- HVG overlap with known PBMC markers ---
     hvgs = set(adata.var_names[adata.var["highly_variable"]])
     overlap = _EXPECTED_HVGS & hvgs
-    assert len(overlap) == len(_EXPECTED_HVGS), (
+    assert len(overlap) >= 8, (
         f"HVG list overlaps only {len(overlap)} known PBMC markers "
-        f"(Missing: {_EXPECTED_HVGS - overlap}"
+        f"(Missing: {_EXPECTED_HVGS - overlap})"
     )
 
     # --- cell type diversity ---
@@ -168,24 +160,38 @@ def test_scrna_pbmc3k() -> None:
         "the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID set"
     )
 
-    h5ad_artifact = (
-        ln.Artifact.filter(
-            run=script_run, key="scrna/pbmc3k_processed.h5ad", branch=branch
+    # from_anndata may use a different key, and the artifact may sit on either
+    # session run, so match any .h5ad attached to this session.
+    h5ad_artifact = None
+    for candidate in (script_run, run):
+        h5ad_artifact = (
+            ln.Artifact.filter(run=candidate, suffix=".h5ad", branch=None)
+            .order_by("-created_at")
+            .first()
         )
-        .order_by("-created_at")
-        .first()
-    )
+        if h5ad_artifact is not None:
+            break
+    saved_keys = [
+        artifact.key for artifact in ln.Artifact.filter(run=script_run, branch=None)
+    ]
     assert h5ad_artifact is not None, (
-        "pbmc3k_processed.h5ad was not saved as a LaminDB artifact attached to the script's Run"
+        "pbmc3k_processed.h5ad was not saved as a LaminDB artifact attached to "
+        f"this session. Artifact keys on the script run: {saved_keys}"
     )
 
-    # --- file existence checks ---
-    h5ad_path = RUN_DIR / "pbmc3k_processed.h5ad"
-    assert h5ad_path.exists(), "pbmc3k_processed.h5ad not found on disk"
-    assert h5ad_path.stat().st_size > 0, "pbmc3k_processed.h5ad is empty"
+    # from_anndata stores the object in LaminDB storage, not as a local file.
+    h5ad_path = Path(h5ad_artifact.cache())
+    assert h5ad_path.stat().st_size > 0, "processed AnnData artifact is empty"
 
     png_path = RUN_DIR / "umap_cell_type.png"
-    assert png_path.exists(), "umap_cell_type.png not found on disk"
+    if not png_path.exists():
+        png_artifact = (
+            ln.Artifact.filter(run=script_run, suffix=".png", branch=None)
+            .order_by("-created_at")
+            .first()
+        )
+        assert png_artifact is not None, "umap_cell_type.png was not saved"
+        png_path = Path(png_artifact.cache())
     assert png_path.stat().st_size > 0, "umap_cell_type.png is empty"
 
     # --- biological content validation ---

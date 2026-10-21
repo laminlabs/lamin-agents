@@ -63,7 +63,9 @@ def test_curate_mini_immuno() -> None:
     assert script_result.returncode == 1, (
         f"{script.name} failed\nSTDOUT:\n{script_result.stdout}\nSTDERR:\n{script_result.stderr}"
     )
+    stderr = script_result.stderr
+    assert "IFNJ" in stderr, stderr
     assert (
-        "lamindb.errors.ValidationError: 1 term not validated in feature 'perturbation': 'IFNJ'"
-        in script_result.stderr
-    )
+        "not validated in feature 'perturbation'" in stderr
+        or "valid label for subtype 'Perturbations'" in stderr
+    ), stderr
