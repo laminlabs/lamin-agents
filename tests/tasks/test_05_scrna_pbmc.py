@@ -162,15 +162,24 @@ def test_scrna_pbmc3k() -> None:
         "the generated script was not self-tracked with LAMIN_INITIATED_BY_RUN_UID set"
     )
 
-    h5ad_artifact = (
-        ln.Artifact.filter(
-            run=script_run, key="scrna/pbmc3k_processed.h5ad", branch=branch
+    # The script chooses the key and may save on the branch that owns the run,
+    # so match the processed file by name across branches and both session runs.
+    h5ad_artifact = None
+    for candidate in (script_run, run):
+        h5ad_artifact = (
+            ln.Artifact.filter(run=candidate, branch=None)
+            .filter(key__endswith="pbmc3k_processed.h5ad")
+            .order_by("-created_at")
+            .first()
         )
-        .order_by("-created_at")
-        .first()
-    )
+        if h5ad_artifact is not None:
+            break
+    saved_keys = [
+        artifact.key for artifact in ln.Artifact.filter(run=script_run, branch=None)
+    ]
     assert h5ad_artifact is not None, (
-        "pbmc3k_processed.h5ad was not saved as a LaminDB artifact attached to the script's Run"
+        "pbmc3k_processed.h5ad was not saved as a LaminDB artifact attached to "
+        f"this session. Artifact keys on the script run: {saved_keys}"
     )
 
     # --- file existence checks ---
