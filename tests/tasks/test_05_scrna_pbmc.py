@@ -182,13 +182,19 @@ def test_scrna_pbmc3k() -> None:
         f"this session. Artifact keys on the script run: {saved_keys}"
     )
 
-    # --- file existence checks ---
-    h5ad_path = RUN_DIR / "pbmc3k_processed.h5ad"
-    assert h5ad_path.exists(), "pbmc3k_processed.h5ad not found on disk"
-    assert h5ad_path.stat().st_size > 0, "pbmc3k_processed.h5ad is empty"
+    # from_anndata stores the object in LaminDB storage, not as a local file.
+    h5ad_path = Path(h5ad_artifact.cache())
+    assert h5ad_path.stat().st_size > 0, "processed AnnData artifact is empty"
 
     png_path = RUN_DIR / "umap_cell_type.png"
-    assert png_path.exists(), "umap_cell_type.png not found on disk"
+    if not png_path.exists():
+        png_artifact = (
+            ln.Artifact.filter(run=script_run, suffix=".png", branch=None)
+            .order_by("-created_at")
+            .first()
+        )
+        assert png_artifact is not None, "umap_cell_type.png was not saved"
+        png_path = Path(png_artifact.cache())
     assert png_path.stat().st_size > 0, "umap_cell_type.png is empty"
 
     # --- biological content validation ---
