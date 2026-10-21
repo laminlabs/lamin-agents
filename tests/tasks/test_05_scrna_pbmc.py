@@ -3,7 +3,12 @@ from pathlib import Path
 import anndata as ad
 import lamindb as ln
 import scanpy as sc
-from testutils import TESTDB1_DEV_DIR, _install_scrna_skill, run_claudecode
+from testutils import (
+    TESTDB1_DEV_DIR,
+    _install_scrna_skill,
+    run_claudecode,
+    tracked_branch,
+)
 
 # Known stable HVGs in PBMC3k under seurat_v3 / n_top_genes=2000.
 # These span all major cell types and should always rank as highly variable.
