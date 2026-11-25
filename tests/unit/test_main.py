@@ -5,6 +5,7 @@ import re
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from click.testing import CliRunner
@@ -142,25 +143,50 @@ def test_lag_prompt_requires_prompt_argument() -> None:
     assert "Missing argument 'PROMPT'" in result.output
 
 
-def test_lag_default_mode_executes_prompt_path(monkeypatch) -> None:
-    monkeypatch.setattr("laminagent._lag.setup", lambda *args, **kwargs: None)
+@pytest.mark.parametrize(
+    "keys",
+    [
+        ["test-lag/create_fasta.py"],
+        ["missing.py"],
+        ["test-lag/create_fasta.py", "missing.py"],
+    ],
+)
+def test_lag_default_mode_executes_only_local_prompt_paths(
+    monkeypatch, tmp_path: Path, keys: list[str]
+) -> None:
+    from laminagent import _lag as lag_module
 
-    def _fake_execute(prompt: str) -> dict[str, str | None]:
-        assert prompt == "run test-lag/create_fasta.py"
-        return {
-            "run_uid": "run-1",
-            "resolved_paths": "",
-            "final_text": "done",
-        }
-
-    monkeypatch.setattr("laminagent._lag.execute_existing_from_prompt", _fake_execute)
+    monkeypatch.chdir(tmp_path)
+    local = tmp_path / "test-lag/create_fasta.py"
+    local.parent.mkdir()
+    local.write_text("print('local')\n")
+    before = set(tmp_path.rglob("*"))
+    remote_lookup = Mock(side_effect=AssertionError("Must not fetch remote code"))
+    for registry in ("Transform", "Artifact"):
+        monkeypatch.setattr(
+            lag_module.ln, registry, SimpleNamespace(filter=remote_lookup)
+        )
+    monkeypatch.setattr(lag_module.ln, "context", SimpleNamespace(run=None))
+    execute = Mock(return_value={"final_text": "done"})
+    monkeypatch.setattr(lag_module, "execute_runnable_paths", execute)
+    prompt = "run " + " and ".join(keys)
     runner = CliRunner()
-    result = runner.invoke(lag, ["prompt", "run test-lag/create_fasta.py"])
+    result = runner.invoke(lag, ["prompt", prompt])
 
-    assert result.exit_code == 0
-    clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
-    assert "[Notes]" in clean_output
-    assert "done" in clean_output
+    remote_lookup.assert_not_called()
+    assert set(tmp_path.rglob("*")) == before
+    if "missing.py" in keys:
+        assert result.exit_code == 1
+        assert "Download and review it before running" in result.output
+        execute.assert_not_called()
+    else:
+        assert result.exit_code == 0, result.output
+        execute.assert_called_once()
+        assert execute.call_args.kwargs["runnable_paths"] == [local.resolve()]
+        assert execute.call_args.kwargs["prompt"] == prompt
+        clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "[Notes]" in clean_output
+        assert "done" in clean_output
 
 
 def test_lag_auto_authoring_runs_without_verbose_option(monkeypatch) -> None:
