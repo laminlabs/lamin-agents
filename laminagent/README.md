@@ -40,7 +40,7 @@ If these records are missing, `lag` still runs; run `lag setup` when you also wa
 
 `lag` decides behavior from prompt and local context:
 
-- If `prompt` includes explicit runnable `.py` keys/paths, `lag` executes those scripts.
+- If `prompt` includes explicit runnable `.py` paths, `lag` executes those local scripts. If any is missing, it stops before executing any of them. Download and review remote scripts first; `lag` does not fetch matching Transforms automatically. This also applies to the `laminagent.prompt()` Python API.
 - Otherwise, if `tool.md` (or latest `tool_*.md`) exists, `lag` executes scripts referenced there.
 - Otherwise, `lag` invokes LLM authoring to create/update a runnable `.py` script and saves it via `ln.Transform`.
 
