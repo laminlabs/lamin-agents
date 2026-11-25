@@ -63,16 +63,6 @@ def _is_aws_lambda_runtime() -> bool:
     return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("LAMBDA_TASK_ROOT"))
 
 
-def _resolve_writable_path(path: Path) -> Path:
-    if not _is_aws_lambda_runtime():
-        return path
-    if path.is_absolute():
-        if path == _LAMBDA_TMP_DIR or _LAMBDA_TMP_DIR in path.parents:
-            return path
-        return _LAMBDA_TMP_DIR / path.as_posix().lstrip("/")
-    return _LAMBDA_TMP_DIR / path
-
-
 def _secho(
     message: str,
     *,
@@ -461,42 +451,13 @@ def _extract_runnable_keys_from_prompt(prompt: str) -> list[str]:
     return keys
 
 
-def _materialize_transform_source(key: str) -> Path | None:
-    transform = ln.Transform.filter(key=key).one_or_none()
-    if transform is None:
-        return None
-    source_code = str(getattr(transform, "source_code", "") or "")
-    if not source_code:
-        artifact = ln.Artifact.filter(
-            transform=transform, suffix=Path(key).suffix
-        ).first()
-        if artifact is not None:
-            try:
-                source_code = artifact.open().read().decode("utf-8")
-            except Exception as exc:
-                raise click.ClickException(
-                    f"Found transform '{key}' but failed to read source artifact: {exc}"
-                ) from exc
-    if not source_code:
-        raise click.ClickException(
-            f"Found transform '{key}' but no executable source code was available."
-        )
-
-    output_path = _resolve_writable_path(Path(key)).resolve()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(source_code, encoding="utf-8")
-    return output_path
-
-
 def _resolve_existing_runnable_path(key: str) -> Path:
     local_path = Path(key).resolve()
     if local_path.exists():
         return local_path
-    materialized = _materialize_transform_source(key)
-    if materialized is not None:
-        return materialized
     raise click.ClickException(
-        f"Runnable tool '{key}' was not found as a local file or transform key in the current instance."
+        f"Runnable tool '{key}' was not found locally. "
+        "Download and review it before running."
     )
 
 
