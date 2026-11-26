@@ -225,9 +225,14 @@ def run_claudecode(
             normalize_claude_usage,
             record_usage_task_name,
         )
+        from lamindb_setup.core._settings_store import dev_dir_containing
 
         payload = json.loads(result.stdout)
-        state_file = run_dir / ".claude" / f".lamindb_run_uid_{payload['session_id']}"
+        dev_dir = (
+            dev_dir_containing(run_dir, instance_slug=ln.setup.settings.instance.slug)
+            or run_dir
+        )
+        state_file = dev_dir / ".claude" / f".lamindb_run_uid_{payload['session_id']}"
         # finish removes the active marker; the instance-scoped mapping persists.
         mapping = persistent_run_uid_file(state_file, ln)
         run = ln.Run.get(mapping.read_text().strip())
@@ -238,7 +243,7 @@ def run_claudecode(
         run.extra_data = {
             **(run.extra_data or {}),
             "claude_usage": payload["usage"],
-            "claude_model_usage": payload.get("modelUsage", {}),
+            "claude_model_usage": payload["modelUsage"],
         }
         run.save()
         log_usage_record(

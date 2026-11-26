@@ -79,14 +79,16 @@ def log_usage_record(
 
 
 def normalize_claude_usage(result: dict) -> dict[str, int | None]:
-    """Use final CLI totals; cached input contributes to the full prompt size."""
-    usage = result["usage"]
-    prompt_tokens = (
-        usage["input_tokens"]
-        + usage.get("cache_creation_input_tokens", 0)
-        + usage.get("cache_read_input_tokens", 0)
+    """Include parent and subagent usage from the final per-model totals."""
+    prompt_tokens = sum(
+        usage["inputTokens"]
+        + usage["cacheCreationInputTokens"]
+        + usage["cacheReadInputTokens"]
+        for usage in result["modelUsage"].values()
     )
-    output_tokens = usage["output_tokens"]
+    output_tokens = sum(
+        usage["outputTokens"] for usage in result["modelUsage"].values()
+    )
     return {
         # num_turns is not a count of all API requests (e.g. subagent calls).
         "n_call_count": None,
