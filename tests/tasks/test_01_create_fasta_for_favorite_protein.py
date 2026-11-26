@@ -79,6 +79,20 @@ def _verify_agent_tracking(
     assert run.report is not None, "skill did not save a run.report"
     assert run.finished_at is not None, "skill never closed the run (Step 3 skipped)"
 
+    if transform_key == "__claudecode__":
+        from laminagent._setup import get_task
+
+        task = get_task("01_create_fasta_for_favorite_protein")
+        evaluation = ln.Record.filter(type=task, run=run, branch=None).one()
+        values = evaluation.features.get_values()
+        assert values["n_prompt_tokens"] > 0
+        assert values["n_output_tokens"] > 0
+        assert (
+            values["n_total_tokens"]
+            == values["n_prompt_tokens"] + values["n_output_tokens"]
+        )
+        assert values["duration_in_sec"] > 0
+
     assert_single_valid_script(run_dir)
 
     # Find the script's own Run via its initiated_by_run lineage, not by guessing

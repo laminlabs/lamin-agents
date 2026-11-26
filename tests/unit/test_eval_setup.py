@@ -1,5 +1,3 @@
-import importlib
-import sys
 import types
 from pathlib import Path
 
@@ -90,9 +88,9 @@ def test_setup_creates_eval_registry_with_expected_schema(monkeypatch) -> None:
         Record=FakeRecord,
     )
 
-    monkeypatch.setitem(sys.modules, "lamindb", fake_ln)
-    sys.modules.pop("laminagent._setup", None)
-    module = importlib.import_module("laminagent._setup")
+    from laminagent import _setup as module
+
+    monkeypatch.setattr(module, "ln", fake_ln)
 
     module.setup(
         script_basenames=["test_01_create_fasta_for_favorite_protein.py"],
