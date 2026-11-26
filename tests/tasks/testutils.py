@@ -1,4 +1,5 @@
 import ast
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -215,7 +216,38 @@ def run_claudecode(
         "--permission-mode",
         "bypassPermissions",
     ]
-    return _run_cli(command, cwd=str(run_dir), env=env)
+    result = _run_cli(command, cwd=str(run_dir), env=env)
+    if install_skill:
+        import lamindb as ln
+        from lamin_cli.agents._common import persistent_run_uid_file
+        from laminagent._eval import (
+            log_usage_record,
+            normalize_claude_usage,
+            record_usage_task_name,
+        )
+
+        payload = json.loads(result.stdout)
+        state_file = run_dir / ".claude" / f".lamindb_run_uid_{payload['session_id']}"
+        # finish removes the active marker; the instance-scoped mapping persists.
+        mapping = persistent_run_uid_file(state_file, ln)
+        run = ln.Run.get(mapping.read_text().strip())
+        usage = normalize_claude_usage(payload)
+        run.features.add_values(
+            {key: value for key, value in usage.items() if value is not None}
+        )
+        run.extra_data = {
+            **(run.extra_data or {}),
+            "claude_usage": payload["usage"],
+            "claude_model_usage": payload.get("modelUsage", {}),
+        }
+        run.save()
+        log_usage_record(
+            usage,
+            run=run,
+            duration_in_sec=payload["duration_ms"] / 1000,
+            task_name=record_usage_task_name(run_dir.name),
+        )
+    return result
 
 
 def run_copilot(

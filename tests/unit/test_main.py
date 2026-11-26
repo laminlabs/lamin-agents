@@ -12,7 +12,6 @@ from click.testing import CliRunner
 from laminagent._lag import (
     _extract_runnable_keys_from_prompt,
     _format_progress_message_for_log,
-    _log_gemini_usage_record,
     _parse_generated_paths,
     _print_generated_tool_contents,
     _redact_payload,
@@ -213,9 +212,7 @@ def test_lag_auto_authoring_runs_without_verbose_option(monkeypatch) -> None:
     monkeypatch.setattr(
         "laminagent._lag._log_gemini_usage_to_run_features", lambda *_: None
     )
-    monkeypatch.setattr(
-        "laminagent._lag._log_gemini_usage_record", lambda *_, **__: None
-    )
+    monkeypatch.setattr("laminagent._lag.log_usage_record", lambda *_, **__: None)
     runner = CliRunner()
     result = runner.invoke(lag, ["prompt", "build tool"])
 
@@ -374,78 +371,3 @@ def test_format_progress_message_for_log_summarizes_tool_call_args() -> None:
         formatted == "step 2: tool call -> read_skill_from_lamindb_instance "
         "(uid='u5muNUOPnWPBuZ8z', instance_slug='laminlabs/biomed-skills')"
     )
-
-
-def test_log_gemini_usage_record_writes_record(monkeypatch) -> None:
-    class FakeTask:
-        schema_id = 1
-
-    class FakeRecord:
-        payload = None
-
-        def __init__(self, *, features, type):
-            self.features = features
-            self.type = type
-
-        def save(self):
-            FakeRecord.payload = {"features": self.features, "type": self.type}
-            return self
-
-    monkeypatch.setattr("laminagent._lag.get_task", lambda **_kwargs: FakeTask())
-    monkeypatch.setattr("laminagent._lag.ln.Record", FakeRecord)
-    monkeypatch.setattr("laminagent._lag._current_commit_hash16", lambda: "abc123")
-    monkeypatch.setattr("laminagent._lag._current_runner_env", lambda: "github_hosted")
-
-    _log_gemini_usage_record(
-        {
-            "n_call_count": 1,
-            "n_prompt_tokens": 2,
-            "n_output_tokens": 3,
-            "n_total_tokens": 5,
-        },
-        package_version="0.1.0",
-        duration_in_sec=0.2,
-        task_name="tool.py",
-    )
-
-    assert FakeRecord.payload is not None
-    assert FakeRecord.payload["type"].schema_id == 1
-    assert FakeRecord.payload["features"]["package_version"] == "0.1.0"
-    assert FakeRecord.payload["features"]["n_total_tokens"] == 5
-
-
-def test_log_gemini_usage_record_skips_when_task_not_configured(monkeypatch) -> None:
-    monkeypatch.setattr("laminagent._lag.get_task", lambda **_kwargs: None)
-
-    _log_gemini_usage_record(
-        {
-            "n_call_count": 1,
-            "n_prompt_tokens": 2,
-            "n_output_tokens": 3,
-            "n_total_tokens": 5,
-        },
-        package_version="0.1.0",
-        duration_in_sec=0.2,
-        task_name="tool",
-    )
-
-
-def test_record_usage_task_name_prefers_pytest_task_context(monkeypatch) -> None:
-    from laminagent._lag import _record_usage_task_name
-
-    monkeypatch.setenv(
-        "PYTEST_CURRENT_TEST",
-        "tests/tasks/test_01_create_fasta_for_favorite_protein.py::test_create_favorite_protein_sequence (call)",
-    )
-
-    task_name = _record_usage_task_name("save_protein.py")
-    assert task_name == "01_create_fasta_for_favorite_protein"
-
-
-def test_record_usage_task_name_falls_back_to_generated_script(monkeypatch) -> None:
-    from laminagent._lag import _record_usage_task_name
-
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-
-    task_name = _record_usage_task_name("save_protein.py")
-    assert task_name == "save_protein"
