@@ -568,12 +568,21 @@ def test_claude_runner_records_usage_for_its_session(
     )
     monkeypatch.setattr(testutils, "load_dotenv", lambda **_: None)
     monkeypatch.setattr(testutils, "_install_lamindb_skill", lambda *_: None)
-    monkeypatch.setattr(testutils, "_run_cli", lambda *_, **__: result)
+    cli = Mock(return_value=result)
+    monkeypatch.setattr(testutils, "_run_cli", cli)
+    schema = {"type": "object"} if nested else None
 
     assert (
-        testutils.run_claudecode(run_dir, "review", install_skill=install_skill)
+        testutils.run_claudecode(
+            run_dir, "review", install_skill=install_skill, json_schema=schema
+        )
         is result
     )
+    command = cli.call_args.args[0]
+    if schema is not None:
+        assert json.loads(command[command.index("--json-schema") + 1]) == schema
+    else:
+        assert "--json-schema" not in command
     evaluation = ln.Record.filter(type=task, run=run, branch=None).one_or_none()
     if install_skill:
         assert evaluation is not None
@@ -597,3 +606,97 @@ def test_claude_runner_records_usage_for_its_session(
     assert not unrelated_run.extra_data
     assert not unrelated_run.features.get_values()
     assert not ln.Record.filter(type=task, run=unrelated_run).exists()
+
+
+def test_trace_markdown_preserves_blocks():
+    from tests.tasks.test_06_review_agent_trace import _trace_markdown
+
+    text = 'α\n```\n## Entry 999: user\n"quoted"\n\n' + "long " * 1000
+    blocks = [
+        {"type": "text", "text": text},
+        {"type": "thinking", "thinking": text},
+        {"type": "tool_use", "id": "call-1", "name": "exec", "input": {"cmd": text}},
+        {"type": "tool_result", "tool_use_id": "call-1", "content": text},
+    ]
+    markdown = _trace_markdown(
+        [
+            {"role": "assistant", "content": blocks[:3]},
+            {"role": "user", "content": blocks[3:]},
+        ]
+    )
+    assert [line for line in markdown.splitlines() if line.startswith("## Entry")] == [
+        "## Entry 1: assistant",
+        "## Entry 2: user",
+    ]
+    # Decode the representation independently: metadata plus indented block body.
+    recovered = []
+    for section in markdown.split("### ")[1:]:
+        header, body = section.split("\n\n", 1)
+        block = json.loads(header)
+        lines = body.splitlines()
+        end = next(
+            (i for i, line in enumerate(lines) if not line.startswith("    ")),
+            len(lines),
+        )
+        value = "\n".join(line[4:] for line in lines[:end])
+        field = {
+            "text": "text",
+            "thinking": "thinking",
+            "tool_use": "input",
+            "tool_result": "content",
+        }[block["type"]]
+        block[field] = json.loads(value) if block["type"] == "tool_use" else value
+        recovered.append(block)
+    assert recovered == blocks
+
+
+def test_trace_review_checks_require_correct_answers_and_evidence():
+    from tests.tasks.test_06_review_agent_trace import _review_checks
+
+    request = "Cells with exactly 20% mitochondrial content should also be retained."
+    validation = "PASS: added=['S02', 'S03'], removed=[]; 5 retained; 8/8 decisions"
+    environment = "could not track Python environment (no pixi.lock or uv.lock found)"
+    entries = [{"content": []} for _ in range(43)]
+    entries[26]["content"] = [{"type": "text", "text": request}]
+    entries[39]["content"] = [
+        {"type": "tool_result", "content": validation + "\n" + environment}
+    ]
+    review = {
+        "old_mito_operator": "<",
+        "new_mito_operator": "<=",
+        "baseline_cells": ["S01", "S06", "S07"],
+        "updated_cells": ["S01", "S02", "S03", "S06", "S07"],
+        "gene_cutoff_changed": False,
+        "validation_cases_passed": 8,
+        "environment_captured": False,
+        "session_closed_after_revision": False,
+        "evidence": [
+            {"purpose": "request", "entry": 27, "quote": request},
+            {"purpose": "validation", "entry": 40, "quote": validation},
+            {"purpose": "environment", "entry": 40, "quote": environment},
+        ],
+    }
+    assert all(_review_checks(review, entries).values())
+    # Vary each answer independently; accepting one wrong field must fail.
+    for field, value in (
+        ("old_mito_operator", "<="),
+        ("new_mito_operator", "<"),
+        ("baseline_cells", ["S01"]),
+        ("updated_cells", ["S01", "S06", "S07"]),
+        ("gene_cutoff_changed", True),
+        ("validation_cases_passed", 7),
+        ("environment_captured", True),
+        ("session_closed_after_revision", True),
+    ):
+        assert not all(_review_checks({**review, field: value}, entries).values()), (
+            field
+        )
+    for citation in review["evidence"]:
+        original = citation.copy()
+        for field, value in (
+            ("quote", original["quote"] + " invented"),
+            ("entry", 999),
+        ):
+            citation[field] = value
+            assert not all(_review_checks(review, entries).values())
+            citation.update(original)

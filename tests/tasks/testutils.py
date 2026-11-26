@@ -190,10 +190,26 @@ def _install_scrna_skill(run_dir: Path) -> None:
     _install_local_skill(run_dir, src)
 
 
+def claude_session_run(run_dir: str | Path, session_id: str):
+    """Resolve the Run from the CLI's instance-scoped session mapping."""
+    import lamindb as ln
+    from lamin_cli.agents._common import persistent_run_uid_file
+    from lamindb_setup.core._settings_store import dev_dir_containing
+
+    dev_dir = dev_dir_containing(
+        Path(run_dir), instance_slug=ln.setup.settings.instance.slug
+    ) or Path(run_dir)
+    state_file = dev_dir / ".claude" / f".lamindb_run_uid_{session_id}"
+    # finish removes the active marker; the instance-scoped mapping persists.
+    return ln.Run.get(persistent_run_uid_file(state_file, ln).read_text().strip())
+
+
 def run_claudecode(
     run_dir: str | Path,
     prompt: str,
     install_skill: bool = False,
+    *,
+    json_schema: dict | None = None,
 ) -> subprocess.CompletedProcess[str]:
     load_dotenv(dotenv_path=Path("~/llms.env").expanduser())
     api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -216,26 +232,18 @@ def run_claudecode(
         "--permission-mode",
         "bypassPermissions",
     ]
+    if json_schema is not None:
+        command.extend(["--json-schema", json.dumps(json_schema)])
     result = _run_cli(command, cwd=str(run_dir), env=env)
     if install_skill:
-        import lamindb as ln
-        from lamin_cli.agents._common import persistent_run_uid_file
         from laminagent._eval import (
             log_usage_record,
             normalize_claude_usage,
             record_usage_task_name,
         )
-        from lamindb_setup.core._settings_store import dev_dir_containing
 
         payload = json.loads(result.stdout)
-        dev_dir = (
-            dev_dir_containing(run_dir, instance_slug=ln.setup.settings.instance.slug)
-            or run_dir
-        )
-        state_file = dev_dir / ".claude" / f".lamindb_run_uid_{payload['session_id']}"
-        # finish removes the active marker; the instance-scoped mapping persists.
-        mapping = persistent_run_uid_file(state_file, ln)
-        run = ln.Run.get(mapping.read_text().strip())
+        run = claude_session_run(run_dir, payload["session_id"])
         usage = normalize_claude_usage(payload)
         run.features.add_values(
             {key: value for key, value in usage.items() if value is not None}
