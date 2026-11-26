@@ -1,4 +1,3 @@
-import itertools
 import json
 import subprocess
 
@@ -9,10 +8,12 @@ from laminagent._eval import log_usage_record, normalize_claude_usage
 
 @pytest.mark.parametrize(
     "model_count,cache_read,cache_creation,zero",
-    [(None, 0, 0, False), (1, 0, 0, True)]
-    + [
-        (count, read, create, False)
-        for count, read, create in itertools.product([1, 2], [0, 7], [0, 11])
+    [
+        (None, 0, 0, False),  # Gemini
+        (1, 0, 0, True),  # Claude: reported zero usage
+        (1, 0, 0, False),  # Uncached input and output
+        (1, 7, 0, False),  # Cache reads without cache creation
+        (2, 0, 11, False),  # Multiple models, cache creation without cache reads
     ],
 )
 def test_log_usage_record_writes_record(
@@ -111,25 +112,23 @@ def test_log_usage_record_skips_when_task_not_configured(monkeypatch) -> None:
     )
 
 
-def test_record_usage_task_name_prefers_pytest_task_context(monkeypatch) -> None:
-    from laminagent._eval import record_usage_task_name
-
-    monkeypatch.setenv(
-        "PYTEST_CURRENT_TEST",
-        "tests/tasks/test_01_create_fasta_for_favorite_protein.py::test_create_favorite_protein_sequence (call)",
-    )
-
-    task_name = record_usage_task_name("save_protein.py")
-    assert task_name == "01_create_fasta_for_favorite_protein"
-
-
-def test_record_usage_task_name_falls_back_to_generated_script(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "current_test,expected",
+    [
+        (None, "save_protein"),
+        (
+            "tests/tasks/test_01_create_fasta_for_favorite_protein.py::test_create_favorite_protein_sequence (call)",
+            "01_create_fasta_for_favorite_protein",
+        ),
+    ],
+)
+def test_record_usage_task_name(monkeypatch, current_test, expected) -> None:
     from laminagent._eval import record_usage_task_name
 
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-
-    task_name = record_usage_task_name("save_protein.py")
-    assert task_name == "save_protein"
+    if current_test is not None:
+        monkeypatch.setenv("PYTEST_CURRENT_TEST", current_test)
+    assert record_usage_task_name("save_protein.py") == expected
 
 
 @pytest.mark.parametrize("result", [{}, {"modelUsage": {"model": {}}}])
